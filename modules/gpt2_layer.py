@@ -29,8 +29,10 @@ class GPT2Layer(nn.Module):
         before it is added to the sub-layer input. WE DO NOT APPLY THE LAYER NORM
         IN THIS FUNCTION.
     """
-    ### YOUR CODE HERE
-    raise NotImplementedError
+    out = dense_layer(output)
+    out = dropout(out)
+    out = input + out
+    return out
 
 
   def forward(self, hidden_states, attention_mask):
@@ -42,6 +44,12 @@ class GPT2Layer(nn.Module):
            - A feed-forward layer that applies transformations to further refine the hidden states.
     """
 
-    ### YOUR CODE HERE
-    raise NotImplementedError
-
+    # LayerNorm before attention
+    attn_input = self.attention_layer_norm(hidden_states)
+    attn_output = self.self_attention(attn_input, attention_mask)
+    attn_residual = self.add(hidden_states, attn_output, self.attention_dense, self.attention_dropout)
+    # LayerNorm before feed-forward
+    ffn_input = self.out_layer_norm(attn_residual)
+    ffn_output = self.interm_af(self.interm_dense(ffn_input))
+    ffn_residual = self.add(attn_residual, ffn_output, self.out_dense, self.out_dropout)
+    return ffn_residual

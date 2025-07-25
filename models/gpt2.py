@@ -49,17 +49,16 @@ class GPT2Model(GPTPreTrainedModel):
 
     inputs_embeds = None
 
-    ### YOUR CODE HERE
-    raise NotImplementedError
-
-
+    # 词嵌入
+    word_embeds = self.word_embedding(input_ids)
+    # 位置嵌入
     pos_ids = self.position_ids[:, :seq_length]
-    pos_embeds = None
-
-    ### TODO: Use pos_ids to get position embedding from self.pos_embedding into pos_embeds.
-    ###       Then, add two embeddings together; then apply dropout and return.
-    ### YOUR CODE HERE
-    raise NotImplementedError
+    pos_embeds = self.pos_embedding(pos_ids)
+    # 相加
+    combined = word_embeds + pos_embeds
+    # dropout
+    embeddings = self.embed_dropout(combined)
+    return embeddings
 
 
   def encode(self, hidden_states, attention_mask):
@@ -105,8 +104,17 @@ class GPT2Model(GPTPreTrainedModel):
 
       return hidden_state(s) * E^T
     """
-    ### YOUR CODE HERE
-    raise NotImplementedError
+    # hidden_state: [batch, seq_len, hidden_size] or [batch, hidden_size]
+    # self.word_embedding.weight: [vocab_size, hidden_size]
+    # logits: [batch, seq_len, vocab_size] or [batch, vocab_size]
+    embedding_weight = self.word_embedding.weight
+    if hidden_state.dim() == 2:
+        # [batch, hidden_size] -> [batch, vocab_size]
+        logits = hidden_state @ embedding_weight.t()
+    else:
+        # [batch, seq_len, hidden_size] -> [batch, seq_len, vocab_size]
+        logits = hidden_state @ embedding_weight.t()
+    return logits
 
 
   @classmethod

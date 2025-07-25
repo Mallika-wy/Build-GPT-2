@@ -1,3 +1,4 @@
+import math
 import torch
 
 from einops import rearrange
@@ -32,9 +33,27 @@ class CausalSelfAttention(nn.Module):
     return proj
 
   def attention(self, key, query, value, attention_mask):
-
-    ### YOUR CODE HERE
-    raise NotImplementedError
+    
+    # 计算QK^T并且进行缩放
+    att = (query @ key.transpose(-2, -1)) / (self.attention_head_size ** 0.5)
+    # mask
+    seq_len = query.size(-2)
+    causal_mask = torch.triu(
+        torch.ones((1, 1, seq_len, seq_len), device=query.device, dtype=query.dtype),
+        diagonal=1
+    ) * -1e4
+    # 合并 mask
+    combined_mask = attention_mask + causal_mask
+    att = att + combined_mask
+    # softmax
+    att = torch.softmax(att, dim=-1)
+    # dropout transformer 的一个经验性技巧, 实验证明这样做能提升模型泛化能力
+    att = self.dropout(att)
+    # att * v : (b, h, t, t) * (b, h, t, d) => (b, h, t, d)
+    y = att @ value
+    # reshape
+    y = rearrange(y, 'b h t d -> b t (h d)')
+    return y
 
 
   def forward(self, hidden_states, attention_mask):
