@@ -44,24 +44,40 @@ class AdamW(Optimizer):
 
                 # Access hyperparameters from the `group` dictionary.
                 alpha = group["lr"]
+                beta1, beta2 = group["betas"]
+                eps = group["eps"]
+                weight_decay = group["weight_decay"]
+                correct_bias = group["correct_bias"]
 
+                # 初始化
+                if not state:
+                    state['t'] = 0
+                    state['m'] = torch.zeros_like(p.data)
+                    state['v'] = torch.zeros_like(p.data)
+                
+                state['t'] = state['t'] + 1
+                m, v, t = state['m'], state['v'], state['t']
+                # 更新一阶、二阶矩
+                # mul_, add_, addcmul_等方法，原地更新张量，效率更高，节省内存
+                m.mul_(beta1).add_(grad, alpha=1-beta1)
+                v.mul_(beta2).addcmul_(grad, grad, value=1-beta2)
 
-                ### TODO: Complete the implementation of AdamW here, reading and saving
-                ###       your state in the `state` dictionary above.
-                ###       The hyperparameters can be read from the `group` dictionary
-                ###       (they are lr, betas, eps, weight_decay, as saved in the constructor).
-                ###
-                ###       To complete this implementation:
-                ###       1. Update the first and second moments of the gradients.
-                ###       2. Apply bias correction
-                ###          (using the "efficient version" given in https://arxiv.org/abs/1412.6980;
-                ###          also given in the pseudo-code in the project description).
-                ###       3. Update parameters (p.data).
-                ###       4. Apply weight decay after the main gradient-based updates.
-                ###
-                ###       Refer to the default project handout for more details.
-                ### YOUR CODE HERE
-                raise NotImplementedError
+                if correct_bias:
+                    # 梯度修正
+                    # 计算bias correction
+                    bias_correction1 = 1 - beta1 ** t
+                    bias_correction2 = 1 - beta2 ** t
+                    m_hat = m / bias_correction1
+                    v_hat = v / bias_correction2
+                else:
+                    m_hat = m
+                    v_hat = v
 
+                # 更新参数
+                p.data.addcdiv_(m_hat, v_hat.sqrt().add_(eps), value=-alpha)
+
+                # 权重衰减
+                if weight_decay > 0:
+                    p.data.mul_(1 - alpha * weight_decay)
 
         return loss
