@@ -119,7 +119,7 @@ def load_paraphrase_data(paraphrase_filename, split='train'):
           pass
 
   print(f"Loaded {len(paraphrase_data)} {split} examples from {paraphrase_filename}")
-  return paraphrase_data
+  return paraphrase_data 
 
 
 class SonnetsDataset(Dataset):
