@@ -121,10 +121,10 @@ class GPT2Model(GPTPreTrainedModel):
 
 
   @classmethod
-  def from_pretrained(cls, model='gpt2', d=768, l=12, num_heads=12):
+  def from_pretrained(cls, model='gpt2', d=768, l=12, num_heads=12, use_lora=False):
     gpt_model = OpenAIGPT2Model.from_pretrained(model).eval()
     our_model = GPT2Model(GPT2Config(hidden_size=d, num_hidden_layers=l,num_attention_heads=num_heads,
-                                     intermediate_size=d*3)).eval()
+                                     intermediate_size=d*3, use_lora=use_lora)).eval()
 
     # Load word and positional embeddings.
     our_model.word_embedding.load_state_dict(gpt_model.wte.state_dict())
@@ -157,6 +157,12 @@ class GPT2Model(GPTPreTrainedModel):
       # Remap second layer norm weights.
       l.out_layer_norm.weight.data = gpt_model.state_dict()[f'h.{i}.ln_2.weight']
       l.out_layer_norm.bias.data = gpt_model.state_dict()[f'h.{i}.ln_2.bias']
+
+      # If using LoRA, remap LoRA layers.
+      if use_lora:
+        # 初始化新的 LoRA 层。
+        nn.init.normal_(l.lora_layer.lora_A.weight, mean=0.0, std=0.01)
+        nn.init.zeros_(l.lora_layer.lora_B.weight)
 
     # Remap the final layer norm values.
     our_model.final_layer_norm.weight.data = gpt_model.state_dict()['ln_f.weight']

@@ -50,12 +50,30 @@ class ParaphraseGPT(nn.Module):
 
   def __init__(self, args):
     super().__init__()
-    self.gpt = GPT2Model.from_pretrained(model=args.model_size, d=args.d, l=args.l, num_heads=args.num_heads)
+    # Check if use_lora flag exists, default to False
+    use_lora = getattr(args, 'use_lora', False)
+    self.gpt = GPT2Model.from_pretrained(model=args.model_size, d=args.d, l=args.l, num_heads=args.num_heads, use_lora=use_lora)
     self.paraphrase_detection_head = nn.Linear(args.d, 2)  # Paraphrase detection has two outputs: 1 (yes) or 0 (no).
 
-    # By default, fine-tune the full model.
-    for param in self.gpt.parameters():
-      param.requires_grad = True
+    if use_lora:
+      # Freeze all parameters first
+      for param in self.gpt.parameters():
+        param.requires_grad = False
+      
+      # Only enable gradients for LoRA parameters and classification head
+      for name, param in self.gpt.named_parameters():
+        if 'lora_layer' in name:
+          param.requires_grad = True
+      
+      # Classification head is always trainable
+      for param in self.paraphrase_detection_head.parameters():
+        param.requires_grad = True
+        
+      print(f"LoRA enabled: Only training LoRA parameters and classification head")
+    else:
+      # By default, fine-tune the full model.
+      for param in self.gpt.parameters():
+        param.requires_grad = True
 
   def forward(self, input_ids, attention_mask):
     """
@@ -110,6 +128,13 @@ def train(args):
   args = add_arguments(args)
   model = ParaphraseGPT(args)
   model = model.to(device)
+
+  # Print trainable parameters info
+  total_params = sum(p.numel() for p in model.parameters())
+  trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
+  print(f"Total parameters: {total_params:,}")
+  print(f"Trainable parameters: {trainable_params:,}")
+  print(f"Trainable ratio: {trainable_params/total_params*100:.2f}%")
 
   lr = args.lr
   optimizer = AdamW(model.parameters(), lr=lr, weight_decay=0.)
@@ -203,11 +228,14 @@ def get_args():
   parser.add_argument("--epochs", type=int, default=10)
   parser.add_argument("--use_gpu", action='store_true')
 
-  parser.add_argument("--batch_size", help='sst: 64, cfimdb: 8 can fit a 12GB GPU', type=int, default=32)
+  parser.add_argument("--batch_size", help='sst: 64, cfimdb: 8 can fit a 12GB GPU', type=int, default=8)
   parser.add_argument("--lr", type=float, help="learning rate", default=1e-5)
   parser.add_argument("--model_size", type=str,
                       help="The model size as specified on hugging face. DO NOT use the xl model.",
                       choices=['gpt2', 'gpt2-medium', 'gpt2-large'], default='gpt2')
+  parser.add_argument("--use_lora", action='store_true', help="Enable LoRA fine-tuning")
+  parser.add_argument("--lora_r", type=int, default=16, help="LoRA rank")
+  parser.add_argument("--lora_alpha", type=int, default=16, help="LoRA alpha scaling factor")
 
   args = parser.parse_args()
   return args
@@ -229,12 +257,25 @@ def add_arguments(args):
     args.num_heads = 20
   else:
     raise Exception(f'{args.model_size} is not supported.')
+  
+  # Add LoRA configuration if enabled
+  if args.use_lora:
+    args.lora_alpha = getattr(args, 'lora_alpha', 16)
+    args.lora_r = getattr(args, 'lora_r', 16)
+    print(f"LoRA configuration: r={args.lora_r}, alpha={args.lora_alpha}")
+  
   return args
 
 
 if __name__ == "__main__":
   args = get_args()
-  args.filepath = f'{args.epochs}-{args.lr}-paraphrase.pt'  # Save path.
+  if args.use_lora:
+    # Set filepath name to include LoRA info
+    lora_suffix = f"-lora-r{args.lora_r}-alpha{args.lora_alpha}" if args.use_lora else ""
+    args.filepath = f'{args.epochs}-{args.lr}-paraphrase{lora_suffix}.pt'  # Save path.
+  else:
+    args.filepath = f'{args.epochs}-{args.lr}-paraphrase.pt'
+  
   seed_everything(args.seed)  # Fix the seed for reproducibility.
   train(args)
   test(args)
