@@ -138,6 +138,9 @@ def train(args):
       train_loss += loss.item()
       num_batches += 1
 
+      if (num_batches) % 1000 == 0:
+        print(f"Epoch {epoch}, Batch {num_batches}: train loss :: {train_loss / num_batches :.3f}")
+
     train_loss = train_loss / num_batches
 
     dev_acc, dev_f1, *_ = model_eval_paraphrase(para_dev_dataloader, model, device)
@@ -200,7 +203,7 @@ def get_args():
   parser.add_argument("--epochs", type=int, default=10)
   parser.add_argument("--use_gpu", action='store_true')
 
-  parser.add_argument("--batch_size", help='sst: 64, cfimdb: 8 can fit a 12GB GPU', type=int, default=8)
+  parser.add_argument("--batch_size", help='sst: 64, cfimdb: 8 can fit a 12GB GPU', type=int, default=32)
   parser.add_argument("--lr", type=float, help="learning rate", default=1e-5)
   parser.add_argument("--model_size", type=str,
                       help="The model size as specified on hugging face. DO NOT use the xl model.",
