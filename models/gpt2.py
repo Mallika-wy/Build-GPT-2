@@ -16,8 +16,12 @@ class GPT2Model(GPTPreTrainedModel):
   1. Embedding layers (used in self.embed).
   2. A stack of n GPT layers (used in self.encode).
   3. A linear transformation layer for the [CLS] token (used in self.forward, as given).
-  """
 
+  我的理解：
+  GPT-2 模型由多个堆叠的 GPT2Layer 组成，每一层都对输入序列进行深度语义建模和特征抽取。
+  经过多层处理后，模型能够充分理解输入句子的上下文信息，并为每个 token 生成一个长度为 hidden_size 的向量表示。
+  最终，我们选取每个样本最后一个有效 token 的隐藏状态作为整句话的语义表征，并据此进行后续的分类或预测任务。
+  """
   def __init__(self, config):
     super().__init__(config)
     self.config = config
@@ -59,7 +63,6 @@ class GPT2Model(GPTPreTrainedModel):
     # dropout
     embeddings = self.embed_dropout(combined)
     return embeddings
-
 
   def encode(self, hidden_states, attention_mask):
     """

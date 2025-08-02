@@ -99,6 +99,7 @@ class ParaphraseDetectionTestDataset(Dataset):
 
 def load_paraphrase_data(paraphrase_filename, split='train'):
   paraphrase_data = []
+  # 训练集和测试集的区别在于是否有is_duplicate标签
   if split == 'test':
     with open(paraphrase_filename, 'r') as fp:
       for record in csv.DictReader(fp, delimiter='\t'):
@@ -111,7 +112,7 @@ def load_paraphrase_data(paraphrase_filename, split='train'):
     with open(paraphrase_filename, 'r') as fp:
       for record in csv.DictReader(fp, delimiter='\t'):
         try:
-          sent_id = record['id'].lower().strip()
+          sent_id = record['id'].lower().strip() # lower() 将字符串转换为小写, strip() 去除首尾空格
           paraphrase_data.append((preprocess_string(record['sentence1']),
                                   preprocess_string(record['sentence2']),
                                   int(float(record['is_duplicate'])), sent_id))

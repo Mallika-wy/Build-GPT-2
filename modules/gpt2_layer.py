@@ -22,13 +22,6 @@ class GPT2Layer(nn.Module):
     self.out_dropout = nn.Dropout(config.hidden_dropout_prob)
 
   def add(self, input, output, dense_layer, dropout):
-    """
-    TODO: Implement this helper method for the forward function.
-      - This function is applied after the multi-head attention layer as well as after the feed forward layer.
-      - GPT-2 layer applies dropout to the transformed output of each sub-layer,
-        before it is added to the sub-layer input. WE DO NOT APPLY THE LAYER NORM
-        IN THIS FUNCTION.
-    """
     out = dense_layer(output)
     out = dropout(out)
     out = input + out
@@ -36,14 +29,6 @@ class GPT2Layer(nn.Module):
 
 
   def forward(self, hidden_states, attention_mask):
-    """
-    TODO: Implement the forward pass. Some key points to consider:
-           - A multi-head attention layer (CausalSelfAttention) that computes self-attention based on masked inputs.
-           - Layer normalization applied *before* the attention layer and feed-forward layer.
-           - Apply dropout, residual connection, and layer normalization according to the plot in the assignment. (Use self.add)
-           - A feed-forward layer that applies transformations to further refine the hidden states.
-    """
-
     # LayerNorm before attention
     attn_input = self.attention_layer_norm(hidden_states)
     attn_output = self.self_attention(attn_input, attention_mask)
