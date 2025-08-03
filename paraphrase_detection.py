@@ -52,7 +52,37 @@ class ParaphraseGPT(nn.Module):
     super().__init__()
     # Check if use_lora flag exists, default to False
     use_lora = getattr(args, 'use_lora', False)
-    self.gpt = GPT2Model.from_pretrained(model=args.model_size, d=args.d, l=args.l, num_heads=args.num_heads, use_lora=use_lora)
+    # Check if use_reft flag exists, default to False
+    use_reft = getattr(args, 'use_reft', False)
+    
+    kwargs = {}
+    if use_lora:
+      kwargs.update({
+        'use_lora': use_lora,
+        'lora_alpha': getattr(args, 'lora_alpha', 16),
+        'lora_r': getattr(args, 'lora_r', 16),
+        'lora_dropout': getattr(args, 'lora_dropout', 0.1)
+      })
+
+    # Collect ReFT kwargs if using ReFT
+    if use_reft:
+      kwargs.update({
+        'reft_rank': getattr(args, 'reft_rank', 4),
+        'reft_dropout': getattr(args, 'reft_dropout', 0.0),
+        'reft_intervention_type': getattr(args, 'reft_intervention_type', 'distributed'),
+          'reft_layers': getattr(args, 'reft_layers', None),
+          'reft_intervene_mlp': getattr(args, 'reft_intervene_mlp', False)
+        })
+
+    self.gpt = GPT2Model.from_pretrained(
+      model=args.model_size, 
+      d=args.d, 
+      l=args.l, 
+      num_heads=args.num_heads, 
+      use_lora=use_lora,
+      use_reft=use_reft,
+      **kwargs
+    )
     self.paraphrase_detection_head = nn.Linear(args.d, 2)  # Paraphrase detection has two outputs: 1 (yes) or 0 (no).
 
     if use_lora:
@@ -70,6 +100,23 @@ class ParaphraseGPT(nn.Module):
         param.requires_grad = True
         
       print(f"LoRA enabled: Only training LoRA parameters and classification head")
+    
+    elif use_reft:
+      # Freeze all parameters first
+      for param in self.gpt.parameters():
+        param.requires_grad = False
+      
+      # Only enable gradients for ReFT parameters and classification head
+      for name, param in self.gpt.named_parameters():
+        if any(reft_keyword in name for reft_keyword in ['reft', 'W_down', 'W_up', 'scale', 'position_embedding']):
+          param.requires_grad = True
+      
+      # Classification head is always trainable
+      for param in self.paraphrase_detection_head.parameters():
+        param.requires_grad = True
+        
+      print(f"ReFT enabled: Only training ReFT parameters and classification head")
+    
     else:
       # By default, fine-tune the full model.
       for param in self.gpt.parameters():
@@ -135,6 +182,13 @@ def train(args):
   print(f"Total parameters: {total_params:,}")
   print(f"Trainable parameters: {trainable_params:,}")
   print(f"Trainable ratio: {trainable_params/total_params*100:.2f}%")
+  
+  # Print ReFT specific info if enabled
+  if getattr(args, 'use_reft', False):
+    from modules.reft import count_reft_parameters
+    reft_params = count_reft_parameters(model)
+    print(f"ReFT parameters: {reft_params:,}")
+    print(f"ReFT parameter ratio: {reft_params/total_params*100:.4f}%")
 
   lr = args.lr
   optimizer = AdamW(model.parameters(), lr=lr, weight_decay=0.)
@@ -233,9 +287,22 @@ def get_args():
   parser.add_argument("--model_size", type=str,
                       help="The model size as specified on hugging face. DO NOT use the xl model.",
                       choices=['gpt2', 'gpt2-medium', 'gpt2-large'], default='gpt2')
+  
   parser.add_argument("--use_lora", action='store_true', help="Enable LoRA fine-tuning")
   parser.add_argument("--lora_r", type=int, default=16, help="LoRA rank")
   parser.add_argument("--lora_alpha", type=int, default=16, help="LoRA alpha scaling factor")
+
+  # ReFT arguments
+  parser.add_argument("--use_reft", action='store_true', help="Enable ReFT fine-tuning")
+  parser.add_argument("--reft_rank", type=int, default=4, help="ReFT intervention rank")
+  parser.add_argument("--reft_dropout", type=float, default=0.0, help="ReFT dropout rate")
+  parser.add_argument("--reft_intervention_type", type=str, default="distributed", 
+                      choices=["distributed", "position_specific"], 
+                      help="Type of ReFT intervention")
+  parser.add_argument("--reft_layers", type=int, nargs='*', default=None, 
+                      help="Specific layers to apply ReFT (None for all layers)")
+  parser.add_argument("--reft_intervene_mlp", action='store_true', 
+                      help="Whether to apply ReFT intervention after MLP layers")
 
   args = parser.parse_args()
   return args
@@ -264,17 +331,33 @@ def add_arguments(args):
     args.lora_r = getattr(args, 'lora_r', 16)
     print(f"LoRA configuration: r={args.lora_r}, alpha={args.lora_alpha}")
   
+  # Add ReFT configuration if enabled
+  if args.use_reft:
+    args.reft_rank = getattr(args, 'reft_rank', 4)
+    args.reft_dropout = getattr(args, 'reft_dropout', 0.0)
+    args.reft_intervention_type = getattr(args, 'reft_intervention_type', 'distributed')
+    args.reft_layers = getattr(args, 'reft_layers', None)
+    args.reft_intervene_mlp = getattr(args, 'reft_intervene_mlp', False)
+    print(f"ReFT configuration: rank={args.reft_rank}, dropout={args.reft_dropout}, "
+          f"type={args.reft_intervention_type}, layers={args.reft_layers}, "
+          f"intervene_mlp={args.reft_intervene_mlp}")
+  
   return args
 
 
 if __name__ == "__main__":
   args = get_args()
+  
+  # Set filepath name to include method info
+  method_suffix = ""
   if args.use_lora:
-    # Set filepath name to include LoRA info
-    lora_suffix = f"-lora-r{args.lora_r}-alpha{args.lora_alpha}" if args.use_lora else ""
-    args.filepath = f'{args.epochs}-{args.lr}-paraphrase{lora_suffix}.pt'  # Save path.
-  else:
-    args.filepath = f'{args.epochs}-{args.lr}-paraphrase.pt'
+    method_suffix = f"-lora-r{args.lora_r}-alpha{args.lora_alpha}"
+  elif args.use_reft:
+    method_suffix = f"-reft-r{args.reft_rank}-{args.reft_intervention_type}"
+    if args.reft_layers:
+      method_suffix += f"-layers{'_'.join(map(str, args.reft_layers))}"
+  
+  args.filepath = f'{args.epochs}-{args.lr}-paraphrase{method_suffix}.pt'  # Save path.
   
   seed_everything(args.seed)  # Fix the seed for reproducibility.
   train(args)

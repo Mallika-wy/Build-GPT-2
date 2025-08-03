@@ -36,7 +36,7 @@ class GPT2Model(GPTPreTrainedModel):
     self.register_buffer('position_ids', position_ids)
 
     # GPT-2 layers.
-    self.gpt_layers = nn.ModuleList([GPT2Layer(config) for _ in range(config.num_hidden_layers)])
+    self.gpt_layers = nn.ModuleList([GPT2Layer(config, layer_idx=i) for i in range(config.num_hidden_layers)])
 
     # [CLS] token transformations.
     self.pooler_dense = nn.Linear(config.hidden_size, config.hidden_size)
@@ -121,10 +121,21 @@ class GPT2Model(GPTPreTrainedModel):
 
 
   @classmethod
-  def from_pretrained(cls, model='gpt2', d=768, l=12, num_heads=12, use_lora=False):
+  def from_pretrained(cls, model='gpt2', d=768, l=12, num_heads=12, use_lora=False, use_reft=False, **kwargs):
     gpt_model = OpenAIGPT2Model.from_pretrained(model).eval()
-    our_model = GPT2Model(GPT2Config(hidden_size=d, num_hidden_layers=l,num_attention_heads=num_heads,
-                                     intermediate_size=d*3, use_lora=use_lora)).eval()
+    
+    # Create config with both LoRA and ReFT support
+    config_kwargs = {
+        'hidden_size': d, 
+        'num_hidden_layers': l,
+        'num_attention_heads': num_heads,
+        'intermediate_size': d*3, 
+        'use_lora': use_lora,
+        'use_reft': use_reft
+    }
+    config_kwargs.update(kwargs)  # Add any ReFT-specific arguments
+    
+    our_model = GPT2Model(GPT2Config(**config_kwargs)).eval()
 
     # Load word and positional embeddings.
     our_model.word_embedding.load_state_dict(gpt_model.wte.state_dict())
@@ -160,9 +171,13 @@ class GPT2Model(GPTPreTrainedModel):
 
       # If using LoRA, remap LoRA layers.
       if use_lora:
-        # 初始化新的 LoRA 层。
-        nn.init.normal_(l.lora_layer.lora_A.weight, mean=0.0, std=0.01)
-        nn.init.zeros_(l.lora_layer.lora_B.weight)
+        # lora layers are already properly initialized in their __init__ method
+        pass
+      
+      # If using ReFT, initialize ReFT layers (already initialized in ReFTIntervention.__init__)
+      if use_reft:
+        # ReFT layers are already properly initialized in their __init__ method
+        pass
 
     # Remap the final layer norm values.
     our_model.final_layer_norm.weight.data = gpt_model.state_dict()['ln_f.weight']

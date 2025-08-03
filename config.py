@@ -210,6 +210,12 @@ class GPT2Config(PretrainedConfig):
           lora_alpha=16,
           lora_r=16,
           lora_dropout=0.1,
+          use_reft=False,
+          reft_rank=4,
+          reft_dropout=0.0,
+          reft_intervention_type="distributed",
+          reft_layers=None,
+          reft_intervene_mlp=False,
           **kwargs
   ):
     super().__init__(pad_token_id=pad_token_id, **kwargs)
@@ -233,3 +239,9 @@ class GPT2Config(PretrainedConfig):
     self.lora_alpha = lora_alpha
     self.lora_r = lora_r
     self.lora_dropout = lora_dropout
+    self.use_reft = use_reft
+    self.reft_rank = reft_rank
+    self.reft_dropout = reft_dropout
+    self.reft_intervention_type = reft_intervention_type
+    self.reft_layers = reft_layers
+    self.reft_intervene_mlp = reft_intervene_mlp
