@@ -1,6 +1,7 @@
 from torch import nn
 import torch.nn.functional as F
-from modules.attention import CausalSelfAttention
+from modules.standard_attention import CausalSelfAttention
+from modules.flash_attention import FlashCausalSelfAttention
 from modules.reft import ReFTLayer
 from modules.lora import LoRALayer
 
@@ -9,9 +10,12 @@ class GPT2Layer(nn.Module):
   def __init__(self, config, layer_idx=0):
     super().__init__()
     self.layer_idx = layer_idx
-    
+
     # Multi-head attention.
-    self.self_attention = CausalSelfAttention(config)
+    if config.use_flash_attention:
+      self.self_attention = FlashCausalSelfAttention(config)
+    else:
+      self.self_attention = CausalSelfAttention(config)
     # Add-norm for multi-head attention.
     self.attention_dense = nn.Linear(config.hidden_size, config.hidden_size)
     self.attention_layer_norm = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)

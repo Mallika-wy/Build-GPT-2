@@ -33,7 +33,6 @@ class CausalSelfAttention(nn.Module):
     return proj
 
   def attention(self, key, query, value, attention_mask):
-    
     # 计算QK^T并且进行缩放
     att = (query @ key.transpose(-2, -1)) / (self.attention_head_size ** 0.5)
     # mask

@@ -216,6 +216,8 @@ class GPT2Config(PretrainedConfig):
           reft_intervention_type="distributed",
           reft_layers=None,
           reft_intervene_mlp=False,
+          use_flash_attention=False,
+          flash_block_size=128,
           **kwargs
   ):
     super().__init__(pad_token_id=pad_token_id, **kwargs)
@@ -245,3 +247,5 @@ class GPT2Config(PretrainedConfig):
     self.reft_intervention_type = reft_intervention_type
     self.reft_layers = reft_layers
     self.reft_intervene_mlp = reft_intervene_mlp
+    self.use_flash_attention = use_flash_attention
+    self.flash_block_size = flash_block_size

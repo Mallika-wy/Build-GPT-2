@@ -121,19 +121,20 @@ class GPT2Model(GPTPreTrainedModel):
 
 
   @classmethod
-  def from_pretrained(cls, model='gpt2', d=768, l=12, num_heads=12, use_lora=False, use_reft=False, **kwargs):
+  def from_pretrained(cls, model='gpt2', d=768, l=12, num_heads=12, use_lora=False, use_reft=False, use_flash_attention=False, **kwargs):
     gpt_model = OpenAIGPT2Model.from_pretrained(model).eval()
     
-    # Create config with both LoRA and ReFT support
+    # Create config with both LoRA, ReFT and FlashAttention support
     config_kwargs = {
         'hidden_size': d, 
         'num_hidden_layers': l,
         'num_attention_heads': num_heads,
         'intermediate_size': d*3, 
         'use_lora': use_lora,
-        'use_reft': use_reft
+        'use_reft': use_reft,
+        'use_flash_attention': use_flash_attention
     }
-    config_kwargs.update(kwargs)  # Add any ReFT-specific arguments
+    config_kwargs.update(kwargs)  # Add any additional arguments
     
     our_model = GPT2Model(GPT2Config(**config_kwargs)).eval()
 

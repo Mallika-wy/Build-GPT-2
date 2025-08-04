@@ -8,7 +8,7 @@ Consider:
 
 Running:
   `python paraphrase_detection.py --use_gpu`
-trains and evaluates your ParaphraseGPT model and writes the required submission files.
+trains and evaluates your ParaphraseGPT model and writes the required submission file0s.
 '''
 
 import argparse
@@ -54,6 +54,8 @@ class ParaphraseGPT(nn.Module):
     use_lora = getattr(args, 'use_lora', False)
     # Check if use_reft flag exists, default to False
     use_reft = getattr(args, 'use_reft', False)
+    # Check if use_flash_attention flag exists, default to False
+    use_flash_attention = getattr(args, 'use_flash_attention', False)
     
     kwargs = {}
     if use_lora:
@@ -81,6 +83,7 @@ class ParaphraseGPT(nn.Module):
       num_heads=args.num_heads, 
       use_lora=use_lora,
       use_reft=use_reft,
+      use_flash_attention=use_flash_attention,
       **kwargs
     )
     self.paraphrase_detection_head = nn.Linear(args.d, 2)  # Paraphrase detection has two outputs: 1 (yes) or 0 (no).
@@ -304,6 +307,10 @@ def get_args():
   parser.add_argument("--reft_intervene_mlp", action='store_true', 
                       help="Whether to apply ReFT intervention after MLP layers")
 
+  # FlashAttention arguments
+  parser.add_argument("--use_flash_attention", action='store_true', help="Enable FlashAttention")
+  parser.add_argument("--flash_block_size", type=int, default=128, help="FlashAttention block size")
+
   args = parser.parse_args()
   return args
 
@@ -341,6 +348,11 @@ def add_arguments(args):
     print(f"ReFT configuration: rank={args.reft_rank}, dropout={args.reft_dropout}, "
           f"type={args.reft_intervention_type}, layers={args.reft_layers}, "
           f"intervene_mlp={args.reft_intervene_mlp}")
+  
+  # Add FlashAttention configuration if enabled
+  if args.use_flash_attention:
+    args.flash_block_size = getattr(args, 'flash_block_size', 128)
+    print(f"FlashAttention enabled with block_size={args.flash_block_size}")
   
   return args
 
